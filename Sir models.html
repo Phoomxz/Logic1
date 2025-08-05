@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แบบจำลอง SIR</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap');
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: #f0f9ff;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .slider-container label {
+            width: 180px;
+        }
+        .slider-value {
+            width: 50px;
+            text-align: right;
+            margin-left: 10px;
+        }
+        input[type="range"] {
+            flex-grow: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <h1 class="text-3xl font-semibold text-center mb-2 text-blue-800">แบบจำลอง SIR</h1>
+            <p class="text-gray-600 text-center mb-6">แบบจำลองการแพร่กระจายของโรคระบาด</p>
+            
+            <div class="bg-blue-50 p-4 rounded-lg mb-6">
+                <h2 class="text-xl font-medium text-blue-800 mb-3">พารามิเตอร์</h2>
+                
+                <div class="slider-container">
+                    <label for="beta" class="font-medium text-gray-700">อัตราการติดเชื้อ (β):</label>
+                    <input type="range" id="beta" min="0" max="1" step="0.01" value="0.3" class="accent-blue-600">
+                    <span id="betaValue" class="slider-value">0.3</span>
+                </div>
+                
+                <div class="slider-container">
+                    <label for="gamma" class="font-medium text-gray-700">อัตราการฟื้นตัว (γ):</label>
+                    <input type="range" id="gamma" min="0" max="1" step="0.01" value="0.1" class="accent-blue-600">
+                    <span id="gammaValue" class="slider-value">0.1</span>
+                </div>
+                
+                <div class="slider-container">
+                    <label for="initialS" class="font-medium text-gray-700">จำนวนผู้ที่มีโอกาสติดเชื้อ:</label>
+                    <input type="range" id="initialS" min="0" max="1000" step="1" value="990" class="accent-blue-600">
+                    <span id="initialSValue" class="slider-value">990</span>
+                </div>
+                
+                <div class="slider-container">
+                    <label for="initialI" class="font-medium text-gray-700">จำนวนผู้ติดเชื้อเริ่มต้น:</label>
+                    <input type="range" id="initialI" min="1" max="100" step="1" value="10" class="accent-blue-600">
+                    <span id="initialIValue" class="slider-value">10</span>
+                </div>
+                
+                <div class="slider-container">
+                    <label for="initialR" class="font-medium text-gray-700">จำนวนผู้ฟื้นตัวเริ่มต้น:</label>
+                    <input type="range" id="initialR" min="0" max="100" step="1" value="0" class="accent-blue-600">
+                    <span id="initialRValue" class="slider-value">0</span>
+                </div>
+                
+                <div class="slider-container">
+                    <label for="days" class="font-medium text-gray-700">จำนวนวัน:</label>
+                    <input type="range" id="days" min="10" max="200" step="1" value="100" class="accent-blue-600">
+                    <span id="daysValue" class="slider-value">100</span>
+                </div>
+                
+                <div class="mt-4 flex justify-center">
+                    <button id="updateBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition duration-300 shadow-md">
+                        อัพเดทกราฟ
+                    </button>
+                </div>
+            </div>
+            
+            <div class="bg-white p-2 rounded-lg">
+                <canvas id="sirChart" height="400"></canvas>
+            </div>
+            
+            <div class="mt-6 bg-blue-50 p-4 rounded-lg">
+                <h2 class="text-xl font-medium text-blue-800 mb-3">ข้อมูลเพิ่มเติม</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-lg shadow">
+                        <h3 class="font-medium text-blue-700">R₀ (Basic Reproduction Number)</h3>
+                        <p id="r0Value" class="text-2xl font-semibold mt-2">3.0</p>
+                        <p class="text-sm text-gray-600 mt-1">จำนวนคนที่ผู้ติดเชื้อ 1 คนสามารถแพร่เชื้อได้</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow">
+                        <h3 class="font-medium text-blue-700">จำนวนผู้ติดเชื้อสูงสุด</h3>
+                        <p id="peakInfected" class="text-2xl font-semibold mt-2">0</p>
+                        <p class="text-sm text-gray-600 mt-1">จำนวนผู้ติดเชื้อสูงสุดในช่วงการระบาด</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow">
+                        <h3 class="font-medium text-blue-700">วันที่มีผู้ติดเชื้อสูงสุด</h3>
+                        <p id="peakDay" class="text-2xl font-semibold mt-2">0</p>
+                        <p class="text-sm text-gray-600 mt-1">วันที่มีจำนวนผู้ติดเชื้อสูงสุด</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sirChart = null;
+        
+        // ฟังก์ชันสำหรับคำนวณแบบจำลอง SIR
+        function calculateSIR(beta, gamma, initialS, initialI, initialR, days) {
+            const N = initialS + initialI + initialR;
+            const dt = 1; // 1 วัน
+            
+            let S = [initialS];
+            let I = [initialI];
+            let R = [initialR];
+            
+            for (let t = 0; t < days; t++) {
+                const dS = -beta * S[t] * I[t] / N * dt;
+                const dI = (beta * S[t] * I[t] / N - gamma * I[t]) * dt;
+                const dR = gamma * I[t] * dt;
+                
+                S.push(S[t] + dS);
+                I.push(I[t] + dI);
+                R.push(R[t] + dR);
+            }
+            
+            return { S, I, R };
+        }
+        
+        // ฟังก์ชันสำหรับสร้างกราฟ
+        function createChart(S, I, R, days) {
+            const ctx = document.getElementById('sirChart').getContext('2d');
+            
+            if (sirChart) {
+                sirChart.destroy();
+            }
+            
+            const labels = Array.from({ length: days + 1 }, (_, i) => i);
+            
+            sirChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'ผู้ที่มีโอกาสติดเชื้อ (S)',
+                            data: S,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'ผู้ติดเชื้อ (I)',
+                            data: I,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'ผู้ฟื้นตัว (R)',
+                            data: R,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'แบบจำลอง SIR',
+                            font: {
+                                size: 18
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += Math.round(context.parsed.y * 100) / 100;
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'วัน',
+                                font: {
+                                    weight: 'bold'
+                                }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'จำนวนประชากร',
+                                font: {
+                                    weight: 'bold'
+                                }
+                            },
+                            min: 0
+                        }
+                    }
+                }
+            });
+        }
+        
+        // ฟังก์ชันสำหรับอัพเดทค่าที่แสดง
+        function updateSliderValues() {
+            document.getElementById('betaValue').textContent = document.getElementById('beta').value;
+            document.getElementById('gammaValue').textContent = document.getElementById('gamma').value;
+            document.getElementById('initialSValue').textContent = document.getElementById('initialS').value;
+            document.getElementById('initialIValue').textContent = document.getElementById('initialI').value;
+            document.getElementById('initialRValue').textContent = document.getElementById('initialR').value;
+            document.getElementById('daysValue').textContent = document.getElementById('days').value;
+            
+            const beta = parseFloat(document.getElementById('beta').value);
+            const gamma = parseFloat(document.getElementById('gamma').value);
+            const r0 = beta / gamma;
+            document.getElementById('r0Value').textContent = Math.round(r0 * 100) / 100;
+        }
+        
+        // ฟังก์ชันสำหรับอัพเดทกราฟ
+        function updateChart() {
+            const beta = parseFloat(document.getElementById('beta').value);
+            const gamma = parseFloat(document.getElementById('gamma').value);
+            const initialS = parseInt(document.getElementById('initialS').value);
+            const initialI = parseInt(document.getElementById('initialI').value);
+            const initialR = parseInt(document.getElementById('initialR').value);
+            const days = parseInt(document.getElementById('days').value);
+            
+            const result = calculateSIR(beta, gamma, initialS, initialI, initialR, days);
+            createChart(result.S, result.I, result.R, days);
+            
+            // หาค่าสูงสุดของผู้ติดเชื้อ
+            const maxInfected = Math.max(...result.I);
+            const maxInfectedDay = result.I.indexOf(maxInfected);
+            
+            document.getElementById('peakInfected').textContent = Math.round(maxInfected);
+            document.getElementById('peakDay').textContent = maxInfectedDay;
+        }
+        
+        // เพิ่ม event listeners
+        document.getElementById('beta').addEventListener('input', updateSliderValues);
+        document.getElementById('gamma').addEventListener('input', updateSliderValues);
+        document.getElementById('initialS').addEventListener('input', updateSliderValues);
+        document.getElementById('initialI').addEventListener('input', updateSliderValues);
+        document.getElementById('initialR').addEventListener('input', updateSliderValues);
+        document.getElementById('days').addEventListener('input', updateSliderValues);
+        document.getElementById('updateBtn').addEventListener('click', updateChart);
+        
+        // เริ่มต้นกราฟ
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSliderValues();
+            updateChart();
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'96439947a07e14aa',t:'MTc1MzM2MjAwOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
